@@ -23,6 +23,7 @@
 //! std, non-async context.
 //!
 //! [`unbuffered-client`]: https://github.com/rustls/rustls/blob/main/examples/src/bin/unbuffererd-client.rs
+//! [`unbuffered-server`]: https://github.com/rustls/rustls/blob/main/examples/src/bin/unbuffererd-server.rs
 
 pub use crate::conn::unbuffered::{
     AppDataAvailable, AppDataRecord, ConnectionState, EncodeError, EncryptError,

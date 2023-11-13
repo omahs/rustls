@@ -514,6 +514,7 @@ pub mod server {
     pub use server_conn::StoresServerSessions;
     pub use server_conn::{
         Accepted, Acceptor, ReadEarlyData, ServerConfig, ServerConnection, ServerConnectionData,
+        UnbufferedServerConnection,
     };
     pub use server_conn::{ClientHello, ProducesTickets, ResolvesServerCert};
 
