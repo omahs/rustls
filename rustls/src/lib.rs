@@ -469,7 +469,7 @@ pub mod client {
 
     pub use builder::WantsClientCert;
     pub use client_conn::{
-        ClientConfig, ClientConnection, ClientConnectionData, ClientSessionStore,
+        ClientConfig, ClientConnection, ClientConnectionData, ClientSessionStore, EarlyDataError,
         ResolvesClientCert, Resumption, Tls12Resumption, UnbufferedClientConnection,
         WriteEarlyData,
     };

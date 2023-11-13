@@ -103,6 +103,20 @@ fn handle(
                 }
             }
 
+            ConnectionState::EarlyDataAvailable(mut state) => {
+                while let Some(res) = state.next_record() {
+                    let AppDataRecord {
+                        discard: new_discard,
+                        payload,
+                    } = res?;
+                    discard += new_discard;
+
+                    println!("early data: {:?}", core::str::from_utf8(payload));
+
+                    received_request = true;
+                }
+            }
+
             ConnectionState::MustEncodeTlsData(mut state) => {
                 try_or_resize_and_retry(
                     |out_buffer| state.encode(out_buffer),

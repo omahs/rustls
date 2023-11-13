@@ -26,8 +26,8 @@
 //! [`unbuffered-server`]: https://github.com/rustls/rustls/blob/main/examples/src/bin/unbuffererd-server.rs
 
 pub use crate::conn::unbuffered::{
-    AppDataAvailable, AppDataRecord, ConnectionState, EncodeError, EncryptError,
-    InsufficientSizeError, MayEncryptAppData, MustEncodeTlsData, MustTransmitTlsData,
+    AppDataAvailable, AppDataRecord, ConnectionState, EarlyDataAvailable, EncodeError,
+    EncryptError, InsufficientSizeError, MayEncryptAppData, MustEncodeTlsData, MustTransmitTlsData,
     UnbufferedStatus,
 };
 pub use crate::conn::UnbufferedConnectionCommon;

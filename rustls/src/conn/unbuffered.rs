@@ -6,19 +6,51 @@ use core::{fmt, mem};
 use std::error::Error as StdError;
 
 use super::UnbufferedConnectionCommon;
+use crate::client::ClientConnectionData;
 use crate::msgs::deframer::DeframerSliceBuffer;
+use crate::server::ServerConnectionData;
 use crate::Error;
 
-impl<Data> UnbufferedConnectionCommon<Data> {
+impl UnbufferedConnectionCommon<ClientConnectionData> {
     /// Processes the TLS records in `incoming_tls` buffer until a new [`UnbufferedStatus`] is
     /// reached.
     pub fn process_tls_records<'c, 'i>(
         &'c mut self,
         incoming_tls: &'i mut [u8],
+    ) -> Result<UnbufferedStatus<'c, 'i, ClientConnectionData>, Error> {
+        self.process_tls_records_common(incoming_tls, |_| None::<()>, |_, _, _| unreachable!())
+    }
+}
+
+impl UnbufferedConnectionCommon<ServerConnectionData> {
+    /// Processes the TLS records in `incoming_tls` buffer until a new [`UnbufferedStatus`] is
+    /// reached.
+    pub fn process_tls_records<'c, 'i>(
+        &'c mut self,
+        incoming_tls: &'i mut [u8],
+    ) -> Result<UnbufferedStatus<'c, 'i, ServerConnectionData>, Error> {
+        self.process_tls_records_common(
+            incoming_tls,
+            |conn| conn.pop_early_data(),
+            |conn, incoming_tls, chunk| EarlyDataAvailable::new(conn, incoming_tls, chunk).into(),
+        )
+    }
+}
+
+impl<Data> UnbufferedConnectionCommon<Data> {
+    fn process_tls_records_common<'c, 'i, T>(
+        &'c mut self,
+        incoming_tls: &'i mut [u8],
+        mut check: impl FnMut(&mut Self) -> Option<T>,
+        execute: impl FnOnce(&'c mut Self, &'i mut [u8], T) -> ConnectionState<'c, 'i, Data>,
     ) -> Result<UnbufferedStatus<'c, 'i, Data>, Error> {
         let mut buffer = DeframerSliceBuffer::new(incoming_tls);
 
         let (discard, state) = loop {
+            if let Some(value) = check(self) {
+                break (buffer.pending_discard(), execute(self, incoming_tls, value));
+            }
+
             if let Some(chunk) = self
                 .core
                 .common_state
@@ -128,6 +160,12 @@ pub enum ConnectionState<'c, 'i, Data> {
     /// Connection has been cleanly closed by the peer
     ConnectionClosed,
 
+    /// One, or more, early (RTT-0) data records are available
+    ///
+    /// See [`EarlyDataAvailable`] for more details on how to use the enclosed object to access
+    /// the received data.
+    EarlyDataAvailable(EarlyDataAvailable<'c, 'i, Data>),
+
     /// A Handshake record is ready for encoding
     ///
     /// Call [`MustEncodeTlsData::encode`] on the enclosed object, providing an `outgoing_tls`
@@ -180,6 +218,12 @@ impl<'c, 'i, Data> From<AppDataAvailable<'c, 'i, Data>> for ConnectionState<'c, 
     }
 }
 
+impl<'c, 'i, Data> From<EarlyDataAvailable<'c, 'i, Data>> for ConnectionState<'c, 'i, Data> {
+    fn from(v: EarlyDataAvailable<'c, 'i, Data>) -> Self {
+        Self::EarlyDataAvailable(v)
+    }
+}
+
 impl<'c, 'i, Data> From<MustEncodeTlsData<'c, Data>> for ConnectionState<'c, 'i, Data> {
     fn from(v: MustEncodeTlsData<'c, Data>) -> Self {
         Self::MustEncodeTlsData(v)
@@ -200,6 +244,10 @@ impl<Data> fmt::Debug for ConnectionState<'_, '_, Data> {
                 .finish(),
 
             Self::ConnectionClosed => write!(f, "ConnectionClosed"),
+
+            Self::EarlyDataAvailable(..) => f
+                .debug_tuple("EarlyDataAvailable")
+                .finish(),
 
             Self::MustEncodeTlsData(..) => f
                 .debug_tuple("MustEncodeTlsData")
@@ -259,6 +307,57 @@ impl<'c, 'i, Data> AppDataAvailable<'c, 'i, Data> {
     /// Returns the payload size of the next app-data record *without* decrypting it
     ///
     /// Returns `None` if there are no more app-data records
+    pub fn peek_len(&self) -> Option<NonZeroUsize> {
+        if self.taken {
+            None
+        } else {
+            NonZeroUsize::new(self.chunk.len())
+        }
+    }
+}
+
+/// Early application-data is available.
+pub struct EarlyDataAvailable<'c, 'i, Data> {
+    _conn: &'c mut UnbufferedConnectionCommon<Data>,
+    // for forwards compatibility; to support in-place decryption in the future
+    _incoming_tls: &'i mut [u8],
+    chunk: Vec<u8>,
+    taken: bool,
+}
+
+impl<'c, 'i, Data> EarlyDataAvailable<'c, 'i, Data> {
+    fn new(
+        _conn: &'c mut UnbufferedConnectionCommon<Data>,
+        _incoming_tls: &'i mut [u8],
+        chunk: Vec<u8>,
+    ) -> Self {
+        Self {
+            _conn,
+            _incoming_tls,
+            chunk,
+            taken: false,
+        }
+    }
+}
+
+impl<'c, 'i> EarlyDataAvailable<'c, 'i, ServerConnectionData> {
+    /// decrypts and returns the next available app-data record
+    // TODO deprecate in favor of `Iterator` implementation, which requires in-place decryption
+    pub fn next_record(&mut self) -> Option<Result<AppDataRecord, Error>> {
+        if self.taken {
+            None
+        } else {
+            self.taken = true;
+            Some(Ok(AppDataRecord {
+                discard: 0,
+                payload: &self.chunk,
+            }))
+        }
+    }
+
+    /// returns the payload size of the next app-data record *without* decrypting it
+    ///
+    /// returns `None` if there are no more app-data records
     pub fn peek_len(&self) -> Option<NonZeroUsize> {
         if self.taken {
             None
@@ -355,7 +454,7 @@ impl<'c, Data> MustEncodeTlsData<'c, Data> {
 
 /// Previously encoded TLS data must be transmitted
 pub struct MustTransmitTlsData<'c, Data> {
-    conn: &'c mut UnbufferedConnectionCommon<Data>,
+    pub(crate) conn: &'c mut UnbufferedConnectionCommon<Data>,
 }
 
 impl<Data> MustTransmitTlsData<'_, Data> {
