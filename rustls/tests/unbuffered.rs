@@ -6,6 +6,7 @@ use rustls::server::{ServerConnectionData, UnbufferedServerConnection};
 use rustls::unbuffered::{
     ConnectionState, MayEncryptAppData, UnbufferedConnectionCommon, UnbufferedStatus,
 };
+use rustls::version::TLS13;
 
 use crate::common::*;
 
@@ -27,6 +28,7 @@ fn handshake() {
                 State::EncodedTlsData => {}
                 State::MustTransmitTlsData {
                     sent_app_data: false,
+                    sent_early_data: false,
                 } => buffers.client_send(),
                 State::NeedsMoreTlsData => buffers.server_send(),
                 State::TrafficTransit {
@@ -39,6 +41,7 @@ fn handshake() {
                 State::EncodedTlsData => {}
                 State::MustTransmitTlsData {
                     sent_app_data: false,
+                    sent_early_data: false,
                 } => buffers.server_send(),
                 State::NeedsMoreTlsData => buffers.client_send(),
                 State::TrafficTransit {
@@ -68,6 +71,7 @@ fn app_data_client_to_server() {
 
         let mut client_actions = Actions {
             app_data_to_send: Some(expected),
+            ..NO_ACTIONS
         };
         let mut received_app_data = vec![];
         let mut count = 0;
@@ -76,7 +80,10 @@ fn app_data_client_to_server() {
         while !client_handshake_done || !server_handshake_done {
             match advance_client(&mut client, &mut buffers.client, client_actions) {
                 State::EncodedTlsData => {}
-                State::MustTransmitTlsData { sent_app_data } => {
+                State::MustTransmitTlsData {
+                    sent_app_data,
+                    sent_early_data: false,
+                } => {
                     buffers.client_send();
 
                     if sent_app_data {
@@ -99,6 +106,7 @@ fn app_data_client_to_server() {
                 State::EncodedTlsData => {}
                 State::MustTransmitTlsData {
                     sent_app_data: false,
+                    sent_early_data: false,
                 } => buffers.server_send(),
                 State::NeedsMoreTlsData => buffers.client_send(),
                 State::ReceivedAppData { records } => {
@@ -136,6 +144,7 @@ fn app_data_server_to_client() {
 
         let mut server_actions = Actions {
             app_data_to_send: Some(expected),
+            ..NO_ACTIONS
         };
         let mut received_app_data = vec![];
         let mut count = 0;
@@ -146,6 +155,7 @@ fn app_data_server_to_client() {
                 State::EncodedTlsData => {}
                 State::MustTransmitTlsData {
                     sent_app_data: false,
+                    sent_early_data: false,
                 } => buffers.client_send(),
                 State::NeedsMoreTlsData => buffers.server_send(),
                 State::TrafficTransit {
@@ -159,7 +169,10 @@ fn app_data_server_to_client() {
 
             match advance_server(&mut server, &mut buffers.server, server_actions) {
                 State::EncodedTlsData => {}
-                State::MustTransmitTlsData { sent_app_data } => {
+                State::MustTransmitTlsData {
+                    sent_app_data,
+                    sent_early_data: false,
+                } => {
                     buffers.server_send();
                     if sent_app_data {
                         server_actions.app_data_to_send = None;
@@ -191,22 +204,113 @@ fn app_data_server_to_client() {
     }
 }
 
+#[test]
+fn early_data() {
+    let expected: &[_] = b"hello";
+
+    let mut server_config = make_server_config(KeyType::Rsa);
+    server_config.max_early_data_size = 128;
+    let server_config = Arc::new(server_config);
+
+    let mut client_config = make_client_config_with_versions(KeyType::Rsa, &[&TLS13]);
+    client_config.enable_early_data = true;
+    let client_config = Arc::new(client_config);
+
+    for conn_count in 0..2 {
+        eprintln!("----");
+        let mut client =
+            UnbufferedClientConnection::new(client_config.clone(), server_name("localhost"))
+                .unwrap();
+        let mut server = UnbufferedServerConnection::new(server_config.clone()).unwrap();
+        let mut buffers = BothBuffers::default();
+
+        let mut client_actions = Actions {
+            early_data_to_send: Some(expected),
+            ..NO_ACTIONS
+        };
+        let mut received_early_data = vec![];
+        let mut count = 0;
+        let mut client_handshake_done = false;
+        let mut server_handshake_done = false;
+        while !client_handshake_done || !server_handshake_done {
+            match advance_client(&mut client, &mut buffers.client, client_actions) {
+                State::EncodedTlsData => {}
+                State::MustTransmitTlsData {
+                    sent_app_data: false,
+                    sent_early_data,
+                } => {
+                    buffers.client_send();
+
+                    if sent_early_data {
+                        client_actions.early_data_to_send = None;
+                    }
+                }
+                State::NeedsMoreTlsData => buffers.server_send(),
+                State::TrafficTransit {
+                    sent_app_data: false,
+                } => client_handshake_done = true,
+                state => unreachable!("{state:?}"),
+            }
+
+            match advance_server(&mut server, &mut buffers.server, NO_ACTIONS) {
+                State::EncodedTlsData => {}
+                State::MustTransmitTlsData {
+                    sent_app_data: false,
+                    sent_early_data: false,
+                } => buffers.server_send(),
+                State::NeedsMoreTlsData => buffers.client_send(),
+                State::TrafficTransit {
+                    sent_app_data: false,
+                } => server_handshake_done = true,
+                State::ReceivedEarlyData { records } => {
+                    received_early_data.extend(records);
+                }
+                state => unreachable!("{state:?}"),
+            }
+
+            count += 1;
+
+            assert!(count <= MAX_ITERATIONS, "handshake was not completed");
+        }
+
+        // early data is not exchanged on the first server interaction
+        if conn_count == 1 {
+            assert!(client_actions
+                .early_data_to_send
+                .is_none());
+            assert_eq!([expected], received_early_data.as_slice());
+        }
+    }
+}
+
 #[derive(Debug)]
 enum State {
     EncodedTlsData,
-    MustTransmitTlsData { sent_app_data: bool },
+    MustTransmitTlsData {
+        sent_app_data: bool,
+        sent_early_data: bool,
+    },
     NeedsMoreTlsData,
-    ReceivedAppData { records: Vec<Vec<u8>> },
-    TrafficTransit { sent_app_data: bool },
+    ReceivedAppData {
+        records: Vec<Vec<u8>>,
+    },
+    ReceivedEarlyData {
+        records: Vec<Vec<u8>>,
+    },
+    TrafficTransit {
+        sent_app_data: bool,
+    },
 }
 
 const NO_ACTIONS: Actions = Actions {
     app_data_to_send: None,
+    early_data_to_send: None,
 };
 
 #[derive(Clone, Copy, Debug)]
 struct Actions<'a> {
     app_data_to_send: Option<&'a [u8]>,
+    early_data_to_send: Option<&'a [u8]>,
 }
 
 fn advance_client(
@@ -218,7 +322,27 @@ fn advance_client(
         .process_tls_records(buffers.incoming.filled())
         .unwrap();
 
-    let state = handle_state(state, &mut buffers.outgoing, actions);
+    let state = match state {
+        ConnectionState::MustTransmitTlsData(mut state) => {
+            let mut sent_early_data = false;
+            if let Some(early_data) = actions.early_data_to_send {
+                if let Some(mut state) = state.may_encrypt_early_data() {
+                    let written = state
+                        .encrypt(early_data, buffers.outgoing.unfilled())
+                        .unwrap();
+                    buffers.outgoing.advance(written);
+                    sent_early_data = true;
+                }
+            }
+            state.done();
+            State::MustTransmitTlsData {
+                sent_app_data: false,
+                sent_early_data,
+            }
+        }
+
+        state => handle_state(state, &mut buffers.outgoing, actions),
+    };
     buffers.incoming.discard(discard);
 
     state
@@ -233,7 +357,19 @@ fn advance_server(
         .process_tls_records(buffers.incoming.filled())
         .unwrap();
 
-    let state = handle_state(state, &mut buffers.outgoing, actions);
+    let state = match state {
+        ConnectionState::EarlyDataAvailable(mut state) => {
+            let mut records = vec![];
+
+            while let Some(res) = state.next_record() {
+                records.push(res.unwrap().payload.to_vec());
+            }
+
+            State::ReceivedEarlyData { records }
+        }
+
+        state => handle_state(state, &mut buffers.outgoing, actions),
+    };
     buffers.incoming.discard(discard);
 
     state
@@ -266,7 +402,10 @@ fn handle_state<Data>(
             // this should be called *after* the data has been transmitted but it's easier to
             // do it in reverse
             state.done();
-            State::MustTransmitTlsData { sent_app_data }
+            State::MustTransmitTlsData {
+                sent_app_data,
+                sent_early_data: false,
+            }
         }
 
         ConnectionState::NeedsMoreTlsData { .. } => State::NeedsMoreTlsData,
