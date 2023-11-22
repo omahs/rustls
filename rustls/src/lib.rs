@@ -364,6 +364,7 @@ mod stream;
 #[cfg(feature = "tls12")]
 mod tls12;
 mod tls13;
+pub mod unbuffered;
 mod vecbuf;
 mod verify;
 #[cfg(test)]
@@ -469,7 +470,8 @@ pub mod client {
     pub use builder::WantsClientCert;
     pub use client_conn::{
         ClientConfig, ClientConnection, ClientConnectionData, ClientSessionStore,
-        ResolvesClientCert, Resumption, Tls12Resumption, WriteEarlyData,
+        ResolvesClientCert, Resumption, Tls12Resumption, UnbufferedClientConnection,
+        WriteEarlyData,
     };
     pub use handy::ClientSessionMemoryCache;
 
