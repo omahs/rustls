@@ -635,7 +635,7 @@ impl<Data> ConnectionCore<Data> {
             }
         };
 
-        while let Some(msg) = self.deframe(Some(&state))? {
+        while let Some(msg) = self.deframe(Some(&*state))? {
             match self.process_msg(msg, state) {
                 Ok(new) => state = new,
                 Err(e) => {
@@ -650,10 +650,7 @@ impl<Data> ConnectionCore<Data> {
     }
 
     /// Pull a message out of the deframer and send any messages that need to be sent as a result.
-    fn deframe(
-        &mut self,
-        state: Option<&Box<dyn State<Data>>>,
-    ) -> Result<Option<PlainMessage>, Error> {
+    fn deframe(&mut self, state: Option<&dyn State<Data>>) -> Result<Option<PlainMessage>, Error> {
         match self.message_deframer.pop(
             &mut self.common_state.record_layer,
             self.common_state.negotiated_version,
