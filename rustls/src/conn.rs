@@ -635,7 +635,12 @@ impl<Data> ConnectionCore<Data> {
             }
         };
 
-        while let Some(msg) = self.deframe()? {
+        while let Some(msg) = self.deframe().map_err(|err| {
+            if err == Error::DecryptError {
+                state.handle_decrypt_error();
+            }
+            err
+        })? {
             match self.process_msg(msg, state) {
                 Ok(new) => state = new,
                 Err(e) => {
