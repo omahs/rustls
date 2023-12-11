@@ -21,38 +21,38 @@ fn tls12_handshake() {
     assert_eq!(
         client_transcript,
         vec![
-            "MustEncodeTlsData",
-            "MustTransmitTlsData",
-            "NeedsMoreTlsData { num_bytes: None }",
-            "NeedsMoreTlsData { num_bytes: None }",
-            "NeedsMoreTlsData { num_bytes: None }",
-            "NeedsMoreTlsData { num_bytes: None }",
-            "MustEncodeTlsData",
-            "MustEncodeTlsData",
-            "MustEncodeTlsData",
-            "MustTransmitTlsData",
-            "NeedsMoreTlsData { num_bytes: None }",
-            "NeedsMoreTlsData { num_bytes: None }",
-            "TrafficTransit"
+            "Ok(MustEncodeTlsData)",
+            "Ok(MustTransmitTlsData)",
+            "Ok(NeedsMoreTlsData { num_bytes: None })",
+            "Ok(NeedsMoreTlsData { num_bytes: None })",
+            "Ok(NeedsMoreTlsData { num_bytes: None })",
+            "Ok(NeedsMoreTlsData { num_bytes: None })",
+            "Ok(MustEncodeTlsData)",
+            "Ok(MustEncodeTlsData)",
+            "Ok(MustEncodeTlsData)",
+            "Ok(MustTransmitTlsData)",
+            "Ok(NeedsMoreTlsData { num_bytes: None })",
+            "Ok(NeedsMoreTlsData { num_bytes: None })",
+            "Ok(TrafficTransit)"
         ],
         "client transcript mismatch"
     );
     assert_eq!(
         server_transcript,
         vec![
-            "NeedsMoreTlsData { num_bytes: None }",
-            "MustEncodeTlsData",
-            "MustEncodeTlsData",
-            "MustEncodeTlsData",
-            "MustEncodeTlsData",
-            "MustTransmitTlsData",
-            "NeedsMoreTlsData { num_bytes: None }",
-            "NeedsMoreTlsData { num_bytes: None }",
-            "NeedsMoreTlsData { num_bytes: None }",
-            "MustEncodeTlsData",
-            "MustEncodeTlsData",
-            "MustTransmitTlsData",
-            "TrafficTransit"
+            "Ok(NeedsMoreTlsData { num_bytes: None })",
+            "Ok(MustEncodeTlsData)",
+            "Ok(MustEncodeTlsData)",
+            "Ok(MustEncodeTlsData)",
+            "Ok(MustEncodeTlsData)",
+            "Ok(MustTransmitTlsData)",
+            "Ok(NeedsMoreTlsData { num_bytes: None })",
+            "Ok(NeedsMoreTlsData { num_bytes: None })",
+            "Ok(NeedsMoreTlsData { num_bytes: None })",
+            "Ok(MustEncodeTlsData)",
+            "Ok(MustEncodeTlsData)",
+            "Ok(MustTransmitTlsData)",
+            "Ok(TrafficTransit)"
         ],
         "server transcript mismatch"
     );
@@ -64,42 +64,42 @@ fn tls13_handshake() {
     assert_eq!(
         client_transcript,
         vec![
-            "MustEncodeTlsData",
-            "MustTransmitTlsData",
-            "NeedsMoreTlsData { num_bytes: None }",
-            "MustEncodeTlsData",
-            "MustTransmitTlsData",
-            "NeedsMoreTlsData { num_bytes: None }",
-            "NeedsMoreTlsData { num_bytes: None }",
-            "NeedsMoreTlsData { num_bytes: None }",
-            "MustEncodeTlsData",
-            "MustTransmitTlsData",
-            "TrafficTransit",
-            "TrafficTransit",
-            "TrafficTransit",
-            "TrafficTransit",
-            "TrafficTransit"
+            "Ok(MustEncodeTlsData)",
+            "Ok(MustTransmitTlsData)",
+            "Ok(NeedsMoreTlsData { num_bytes: None })",
+            "Ok(MustEncodeTlsData)",
+            "Ok(MustTransmitTlsData)",
+            "Ok(NeedsMoreTlsData { num_bytes: None })",
+            "Ok(NeedsMoreTlsData { num_bytes: None })",
+            "Ok(NeedsMoreTlsData { num_bytes: None })",
+            "Ok(MustEncodeTlsData)",
+            "Ok(MustTransmitTlsData)",
+            "Ok(TrafficTransit)",
+            "Ok(TrafficTransit)",
+            "Ok(TrafficTransit)",
+            "Ok(TrafficTransit)",
+            "Ok(TrafficTransit)"
         ],
         "client transcript mismatch"
     );
     assert_eq!(
         server_transcript,
         vec![
-            "NeedsMoreTlsData { num_bytes: None }",
-            "MustEncodeTlsData",
-            "MustEncodeTlsData",
-            "MustEncodeTlsData",
-            "MustEncodeTlsData",
-            "MustEncodeTlsData",
-            "MustEncodeTlsData",
-            "MustTransmitTlsData",
-            "NeedsMoreTlsData { num_bytes: None }",
-            "MustEncodeTlsData",
-            "MustEncodeTlsData",
-            "MustEncodeTlsData",
-            "MustEncodeTlsData",
-            "MustTransmitTlsData",
-            "TrafficTransit"
+            "Ok(NeedsMoreTlsData { num_bytes: None })",
+            "Ok(MustEncodeTlsData)",
+            "Ok(MustEncodeTlsData)",
+            "Ok(MustEncodeTlsData)",
+            "Ok(MustEncodeTlsData)",
+            "Ok(MustEncodeTlsData)",
+            "Ok(MustEncodeTlsData)",
+            "Ok(MustTransmitTlsData)",
+            "Ok(NeedsMoreTlsData { num_bytes: None })",
+            "Ok(MustEncodeTlsData)",
+            "Ok(MustEncodeTlsData)",
+            "Ok(MustEncodeTlsData)",
+            "Ok(MustEncodeTlsData)",
+            "Ok(MustTransmitTlsData)",
+            "Ok(TrafficTransit)"
         ],
         "server transcript mismatch"
     );
@@ -594,15 +594,13 @@ fn advance_client(
     actions: Actions,
     transcript: Option<&mut Vec<String>>,
 ) -> State {
-    let UnbufferedStatus { discard, state } = conn
-        .process_tls_records(buffers.incoming.filled())
-        .unwrap();
+    let UnbufferedStatus { discard, state } = conn.process_tls_records(buffers.incoming.filled());
 
     if let Some(transcript) = transcript {
         transcript.push(format!("{:?}", state));
     }
 
-    let state = match state {
+    let state = match state.unwrap() {
         ConnectionState::MustTransmitTlsData(mut state) => {
             let mut sent_early_data = false;
             if let Some(early_data) = actions.early_data_to_send {
@@ -643,15 +641,13 @@ fn advance_server(
     actions: Actions,
     transcript: Option<&mut Vec<String>>,
 ) -> State {
-    let UnbufferedStatus { discard, state } = conn
-        .process_tls_records(buffers.incoming.filled())
-        .unwrap();
+    let UnbufferedStatus { discard, state } = conn.process_tls_records(buffers.incoming.filled());
 
     if let Some(transcript) = transcript {
         transcript.push(format!("{:?}", state));
     }
 
-    let state = match state {
+    let state = match state.unwrap() {
         ConnectionState::EarlyDataAvailable(mut state) => {
             let mut records = vec![];
 
@@ -891,12 +887,10 @@ fn server_receives_handshake_byte_by_byte() {
     let (mut client, mut server) = make_connection_pair(&TLS13);
 
     let mut client_hello_buffer = vec![0u8; 1024];
-    let UnbufferedStatus { discard, state } = client
-        .process_tls_records(&mut [])
-        .unwrap();
+    let UnbufferedStatus { discard, state } = client.process_tls_records(&mut []);
 
     assert_eq!(discard, 0);
-    match state {
+    match state.unwrap() {
         ConnectionState::MustEncodeTlsData(mut inner) => {
             let wr = inner
                 .encode(&mut client_hello_buffer)
@@ -909,9 +903,8 @@ fn server_receives_handshake_byte_by_byte() {
     println!("client hello: {:?}", client_hello_buffer);
 
     for prefix in 0..client_hello_buffer.len() - 1 {
-        let UnbufferedStatus { discard, state } = server
-            .process_tls_records(&mut client_hello_buffer[..prefix])
-            .unwrap();
+        let UnbufferedStatus { discard, state } =
+            server.process_tls_records(&mut client_hello_buffer[..prefix]);
         println!("prefix {prefix:?}: ({discard:?}, {state:?}");
 
         // TODO: NeedsMoreTlsData::num_bytes is currently unused. we theoretically have the information
@@ -919,7 +912,7 @@ fn server_receives_handshake_byte_by_byte() {
         // The desired behaviour would be:
         // - during the header: { num_bytes: None }
         // - once we have a header, but before the entire message is available: { num_bytes: Some(remaining) }
-        match state {
+        match state.unwrap() {
             ConnectionState::NeedsMoreTlsData { num_bytes } => {
                 assert_eq!(None, num_bytes);
             }
@@ -929,11 +922,10 @@ fn server_receives_handshake_byte_by_byte() {
         };
     }
 
-    let UnbufferedStatus { discard, state } = server
-        .process_tls_records(&mut client_hello_buffer[..])
-        .unwrap();
+    let UnbufferedStatus { discard, state } =
+        server.process_tls_records(&mut client_hello_buffer[..]);
 
-    assert!(matches!(state, ConnectionState::MustEncodeTlsData(_)));
+    assert!(matches!(state, Ok(ConnectionState::MustEncodeTlsData(_))));
     assert_eq!(client_hello_buffer.len(), discard);
 }
 
@@ -942,21 +934,20 @@ fn server_receives_incorrect_first_handshake_message() {
     let (_, mut server) = make_connection_pair(&TLS13);
 
     let mut junk_buffer = vec![0x16, 0x3, 0x1, 0x0, 0x4, 0xff, 0x0, 0x0, 0x0];
+    let junk_buffer_len = junk_buffer.len();
 
-    let err = server
-        .process_tls_records(&mut junk_buffer[..])
-        .unwrap_err();
+    let UnbufferedStatus { discard, state } = server.process_tls_records(&mut junk_buffer[..]);
 
+    assert_eq!(discard, junk_buffer_len);
     assert_eq!(
-        format!("{err:?}"),
-        "InappropriateHandshakeMessage { expect_types: [ClientHello], got_type: Unknown(255) }"
+        format!("{state:?}"),
+        "Err(InappropriateHandshakeMessage { expect_types: [ClientHello], got_type: Unknown(255) })"
     );
 
-    let UnbufferedStatus { discard, state } = server
-        .process_tls_records(&mut junk_buffer[..])
-        .unwrap();
+    let UnbufferedStatus { discard, state } = server.process_tls_records(&mut []);
+    assert_eq!(discard, 0);
 
-    match state {
+    match state.unwrap() {
         ConnectionState::MustEncodeTlsData(mut inner) => {
             let mut alert_buffer = [0u8; 7];
             let wr = inner.encode(&mut alert_buffer).unwrap();
@@ -965,9 +956,4 @@ fn server_receives_incorrect_first_handshake_message() {
         }
         _ => panic!("unexpected alert sending state"),
     };
-
-    // XXX: error should be fused here.
-    let err = server
-        .process_tls_records(&mut junk_buffer[..])
-        .unwrap_err();
 }
